@@ -1,285 +1,323 @@
 # Sistema de Controle Financeiro
 
-Sistema pessoal de controle financeiro desenvolvido com foco em **modelagem de domínio**, projeção financeira e acompanhamento do dinheiro disponível, compromissos futuros, cartões de crédito e movimentações recorrentes.
+Sistema pessoal de controle financeiro desenvolvido com o objetivo de acompanhar contas, movimentações, compromissos financeiros, crédito, recorrências e projeções futuras.
 
-O projeto será desenvolvido inicialmente como um sistema para múltiplos usuários/perfis, permitindo que cada perfil possua diversas contas e instrumentos financeiros.
-
-> **Status do projeto:** Domínio conceitual definido. A stack tecnológica e a implementação ainda serão definidas.
+O projeto também tem como objetivo servir como estudo prático de **Java, Spring Boot, MongoDB e desenvolvimento de uma aplicação modular**, aplicando as decisões de domínio definidas antes da implementação.
 
 ---
 
-# 1. Conceito do Sistema
+## 📌 Objetivos
 
-O sistema tem como objetivo permitir que o usuário acompanhe:
+O sistema deve permitir:
 
-* Quanto dinheiro possui atualmente;
-* Onde esse dinheiro está;
-* Quanto possui disponível em crédito;
-* Quais despesas já aconteceram;
-* Quais receitas já aconteceram;
-* Quais movimentações são esperadas;
-* Quais obrigações financeiras estão previstas;
-* Quais obrigações já foram pagas;
-* Quanto ainda precisa ser pago;
-* O que provavelmente acontecerá com o dinheiro no futuro;
-* Quanto pode ser gasto por dia considerando os compromissos conhecidos;
-* Como o dinheiro está distribuído entre suas contas.
-
-O sistema diferencia explicitamente:
-
-> **O que foi planejado, o que aconteceu e o que ainda precisa acontecer.**
-
-Essa separação é fundamental para a Projection.
+* Gerenciar o perfil financeiro do usuário.
+* Gerenciar contas financeiras.
+* Registrar entradas, despesas e transferências.
+* Criar transações recorrentes.
+* Organizar movimentações por categorias.
+* Gerenciar obrigações financeiras.
+* Registrar pagamentos parciais ou integrais.
+* Gerenciar utilização de crédito.
+* Organizar operações de crédito em faturas mensais.
+* Gerar reembolsos quando operações de crédito forem revertidas após pagamentos.
+* Projetar a evolução financeira futura.
+* Disponibilizar informações consolidadas para um dashboard financeiro.
 
 ---
 
-# 2. Princípios do Domínio
+# 🏗️ Arquitetura
 
-## 2.1 Histórico é preservado
+O projeto utiliza uma arquitetura:
 
-O sistema não deve apagar uma previsão quando ela deixa de ser uma previsão.
+> **Modular Monolith + Layered Architecture**
+
+A aplicação será executada como um único sistema, mas organizada internamente em módulos independentes por responsabilidade e coesão de negócio.
+
+### Princípio principal
+
+> Módulos são definidos principalmente por responsabilidade e coesão de negócio, e não simplesmente por dependência entre entidades.
+
+Uma relação entre dois objetos **não significa que eles precisam pertencer ao mesmo módulo**.
 
 Por exemplo:
 
-```text
-Salário esperado:
-R$ 3.600 em 15/10
-
-Recebido:
-R$ 3.450 em 17/10
-```
-
-O sistema preserva:
-
-```text
-Esperado:  R$ 3.600
-Realizado: R$ 3.450
-```
-
-Isso permite comparar expectativa e realidade.
+* `Account` ↔ `Transaction` → módulos diferentes.
+* `Recurrence` ↔ `Transaction` → módulos diferentes.
+* `Credit` ↔ `Obligation` → módulos diferentes.
+* `Credit` + `Bill` → mesmo módulo.
+* `Obligation` + `Payment` → mesmo módulo.
 
 ---
 
-## 2.2 Valor realizado não altera automaticamente uma recorrência
-
-Uma ocorrência concreta pertence a uma determinada recorrência, mas sua realização não altera a regra da recorrência.
-
-Exemplo:
+# 📦 Organização dos módulos
 
 ```text
-Recurrence: Salário
-Valor recorrente: R$ 3.600
-
-Outubro:
-Esperado:  R$ 3.600
-Realizado: R$ 3.450
-
-Novembro:
-Esperado: R$ 3.600
+financial-system/
+├── profile/
+├── account/
+├── category/
+├── transaction/
+├── recurrence/
+├── obligation/
+│   └── Payment
+├── credit/
+│   ├── CreditOperation
+│   └── Bill
+└── projection/
 ```
 
-O recebimento de R$ 3.450 em outubro não altera automaticamente o salário previsto para novembro.
+Cada módulo possui responsabilidade própria.
 
 ---
 
-## 2.3 Saldos são derivados do histórico
+# 📁 Organização interna dos módulos
 
-O saldo atual não deve ser tratado como a fonte de verdade.
-
-Ele é resultado das movimentações financeiras realizadas.
-
-Para uma conta de dinheiro:
+A organização padrão de um módulo é:
 
 ```text
-Saldo =
-    saldo inicial
-    + receitas realizadas
-    - despesas realizadas
-    + transferências recebidas
-    - transferências enviadas
+module/
+├── presentation/
+├── application/
+├── domain/
+└── infrastructure/
 ```
 
----
+### `presentation`
 
-## 2.4 Transferências não são receitas nem despesas
-
-Transferir R$ 100 do Nubank para o Itaú não aumenta nem diminui o patrimônio total.
-
-Exemplo:
-
-```text
-Antes:
-
-Nubank = R$ 500
-Itaú   = R$ 300
-
-Total  = R$ 800
-```
-
-Após:
-
-```text
-Nubank = R$ 400
-Itaú   = R$ 400
-
-Total  = R$ 800
-```
-
-A transferência apenas altera a distribuição do dinheiro.
-
----
-
-# 3. Principais Conceitos do Domínio
-
-O sistema possui os seguintes conceitos principais:
-
-```text
-Profile
-   │
-   ├── FinancialAccount
-   │
-   ├── Transaction
-   │      └── Recurrence
-   │
-   ├── Obligation
-   │      └── Payment
-   │
-   ├── CreditAccount
-   │      └── Bill
-   │
-   └── Projection
-```
-
-`Projection` é um conceito de cálculo e não uma entidade persistida como fonte de verdade.
-
----
-
-# 4. Profile
-
-Representa o usuário/perfil que possui os dados financeiros.
-
-O sistema deverá suportar múltiplos perfis.
-
-Cada perfil possui seus próprios:
-
-* FinancialAccounts;
-* Transactions;
-* Recurrences;
-* Obligations;
-* Payments;
-* configurações financeiras.
-
-A autenticação e autorização não fazem parte da primeira etapa do domínio.
-
----
-
-# 5. FinancialAccount
-
-## Conceito
-
-`FinancialAccount` representa uma fonte ou instrumento financeiro acompanhado pelo usuário.
-
-O conceito não está limitado a contas bancárias tradicionais.
+Responsável pela entrada e saída externa da aplicação.
 
 Exemplos:
 
-```text
-Nubank
-Itaú
-Dinheiro em espécie
-Nubank Crédito
-PicPay Crédito
-Cartão do João
-```
+* Controllers
+* Requests
+* Responses
 
-O sistema não precisa saber necessariamente quem é o proprietário de um cartão. "Cartão do João" pode simplesmente ser o nome utilizado pelo usuário para identificar aquele instrumento.
+Não deve conter regras de negócio.
 
 ---
+
+### `application`
+
+Responsável por coordenar os casos de uso.
+
+É onde a aplicação:
+
+* recebe uma solicitação;
+* coordena operações;
+* chama o domínio;
+* coordena outros módulos quando necessário.
+
+A camada de aplicação **não deve duplicar regras que pertencem ao domínio**.
+
+---
+
+### `domain`
+
+Contém o núcleo das regras de negócio.
+
+Exemplos:
+
+* Entidades
+* Value Objects
+* Enums
+* Regras de domínio
+* Invariantes
+
+O domínio não deve depender de detalhes de infraestrutura.
+
+---
+
+### `infrastructure`
+
+Responsável pelos detalhes técnicos necessários para executar o sistema.
+
+Exemplos:
+
+* MongoDB
+* Spring Data
+* Implementações de persistência
+* Configurações técnicas
+
+---
+
+# 👤 Profile
+
+O módulo `Profile` representa o contexto financeiro ao qual os demais dados pertencem.
+
+Outros módulos possuem referência ao Profile através de:
+
+```text
+profileId
+```
+
+O Profile não é responsável por gerenciar os outros domínios.
+
+---
+
+# 🏦 Account
+
+Uma `Account` representa uma conta financeira.
+
+Não existe uma entidade separada `CreditAccount`.
+
+Uma Account pode possuir:
+
+* dinheiro;
+* crédito;
+* ambos;
+* somente dinheiro;
+* somente crédito.
+
+## Estrutura conceitual
+
+```text
+Account
+├── id
+├── profileId
+├── name
+├── initialBalance
+└── creditLimit
+```
+
+### `initialBalance`
+
+Representa o dinheiro existente na Account no momento de sua criação.
+
+Não representa o saldo atual.
+
+O saldo atual é consequência das movimentações financeiras.
+
+`initialBalance` é um valor histórico e não deve ser simplesmente alterado posteriormente.
+
+---
+
+### `creditLimit`
+
+Representa o **limite total de crédito da Account**.
+
+Não representa o crédito disponível atual.
+
+O crédito utilizado e o crédito disponível são derivados das `CreditOperations`.
+
+```text
+creditUsed =
+    Σ CreditOperation.amount
+    onde status = APPLIED
+```
+
+```text
+creditAvailable =
+    creditLimit - creditUsed
+```
+
+---
+
+## Regras de `creditLimit`
+
+### Valor nulo
+
+Permitido.
+
+```text
+creditLimit = null
+```
+
+Significa que a Account não possui limite de crédito.
+
+Nesse estado, não é possível criar `CreditOperation` para a Account.
+
+### Zero
+
+Permitido.
+
+```text
+creditLimit = 0
+```
+
+Significa que o limite total é zero.
+
+Nenhuma CreditOperation pode ser criada enquanto o limite disponível for zero.
+
+### Valor negativo
+
+Nunca permitido.
+
+```text
+creditLimit < 0
+```
+
+é inválido.
+
+---
+
+## Alteração do limite
+
+O `creditLimit` pode ser alterado depois da criação da Account.
+
+Aumentar o limite é permitido.
+
+Reduzir o limite é permitido somente quando:
+
+```text
+newCreditLimit >= creditUsed
+```
+
+Isso impede que o crédito disponível se torne negativo.
+
+Uma Account também pode passar de:
+
+```text
+creditLimit = null
+```
+
+para um valor positivo.
+
+A operação inversa:
+
+```text
+creditLimit = valor
+        ↓
+creditLimit = null
+```
+
+somente é permitida quando:
+
+```text
+creditUsed = 0
+```
+
+---
+
+## Ciclo de vida
+
+A Account não é fisicamente excluída.
+
+Quando o cliente solicita a exclusão:
+
+```text
+ACTIVE → INACTIVE
+```
+
+Os dados históricos permanecem.
+
+Uma Account `INACTIVE` não pode ser utilizada para novas operações.
+
+Além disso, uma Account não pode ser desativada enquanto possuir Transactions ativas:
+
+```text
+EXPECTED
+NOT_RECEIVED
+```
+
+Transactions `COMPLETED` e `CANCELLED` não impedem a desativação.
+
+---
+
+# 💰 Transaction
+
+O módulo `Transaction` representa movimentações financeiras.
 
 ## Tipos
-
-```text
-MONEY
-CREDIT
-```
-
-### MONEY
-
-Representa dinheiro líquido disponível.
-
-Exemplos:
-
-```text
-Nubank
-Itaú
-Dinheiro
-```
-
-Possui:
-
-```text
-initialBalance
-```
-
----
-
-### CREDIT
-
-Representa um instrumento de crédito.
-
-Exemplos:
-
-```text
-Nubank Crédito
-Cartão do João
-PicPay
-```
-
-Possui:
-
-```text
-creditLimit
-```
-
----
-
-## Regra
-
-Os campos específicos não devem ser misturados.
-
-```text
-MONEY
-→ initialBalance
-
-CREDIT
-→ creditLimit
-```
-
-O saldo atual de uma conta MONEY é derivado das movimentações.
-
-A utilização de crédito é derivada das movimentações/faturas e obrigações relacionadas.
-
----
-
-# 6. Transaction
-
-## Conceito
-
-`Transaction` representa uma movimentação financeira concreta ou prevista.
-
-Ela é utilizada para:
-
-* receitas;
-* despesas;
-* transferências;
-* movimentações previstas;
-* movimentações já realizadas.
-
-Uma Transaction pode nascer como uma previsão e posteriormente se tornar realizada.
-
----
-
-# 7. Transaction — Tipos
 
 ```text
 INCOME
@@ -287,58 +325,50 @@ EXPENSE
 TRANSFER
 ```
 
-## INCOME
+### INCOME
 
-Representa dinheiro entrando em uma conta.
+Entrada de dinheiro.
 
-Exemplo:
+Requer:
 
 ```text
-Salário
-Freelance
-Reembolso
+destinationAccountId
 ```
+
+### EXPENSE
+
+Saída de dinheiro.
+
+Requer:
+
+```text
+sourceAccountId
+```
+
+### TRANSFER
+
+Transferência entre duas Accounts.
+
+Requer:
+
+```text
+sourceAccountId
+destinationAccountId
+```
+
+As duas contas devem ser diferentes.
+
+Uma transferência normal representa somente:
+
+```text
+MONEY → MONEY
+```
+
+Não representa uma despesa nem uma receita.
 
 ---
 
-## EXPENSE
-
-Representa uma despesa.
-
-Exemplo:
-
-```text
-Mercado
-Internet
-Restaurante
-Compra
-```
-
----
-
-## TRANSFER
-
-Representa movimentação de dinheiro entre duas contas.
-
-Exemplo:
-
-```text
-Nubank → Itaú
-R$ 100
-```
-
-Uma transferência não é contabilizada como:
-
-```text
-+R$ 100 INCOME
--R$ 100 EXPENSE
-```
-
-Ela apenas altera a distribuição do dinheiro.
-
----
-
-# 8. Transaction — Estados
+## Status
 
 ```text
 EXPECTED
@@ -347,442 +377,287 @@ NOT_RECEIVED
 CANCELLED
 ```
 
----
-
-## EXPECTED
-
-A movimentação está prevista, mas ainda não aconteceu.
-
-Exemplo:
+### Transições
 
 ```text
-Salário
-R$ 3.600
-15/10
 EXPECTED
-```
+├── COMPLETED
+├── NOT_RECEIVED
+└── CANCELLED
 
-Uma Transaction EXPECTED:
-
-* participa da Projection como evento futuro;
-* não altera o saldo real;
-* pode posteriormente ser confirmada;
-* pode ser marcada como não recebida;
-* pode ser cancelada.
-
----
-
-## COMPLETED
-
-A movimentação realmente aconteceu.
-
-Exemplo:
-
-```text
-Esperado:  R$ 3.600
-Realizado: R$ 3.450
-Status:    COMPLETED
-```
-
-O valor realizado passa a afetar o estado financeiro real.
-
----
-
-## NOT_RECEIVED
-
-Utilizado para uma entrada prevista que não aconteceu.
-
-Exemplo:
-
-```text
-Esperado: R$ 3.600
-Data:     15/10
-Status:   NOT_RECEIVED
-```
-
-Nesse estado:
-
-* nenhum dinheiro é adicionado ao saldo;
-* a ocorrência deixa de ser considerada uma entrada futura;
-* a previsão original permanece registrada;
-* a Recurrence não é alterada.
-
-`NOT_RECEIVED` é aplicável a entradas.
-
----
-
-## CANCELLED
-
-Indica que a movimentação prevista não acontecerá.
-
-Exemplo:
-
-```text
-Despesa prevista:
-Internet
-R$ 100
-
-Status:
-CANCELLED
-```
-
-A Transaction cancelada:
-
-* não afeta o saldo;
-* não deve continuar como evento futuro;
-* permanece registrada para histórico.
-
----
-
-# 9. Ciclo da Transaction
-
-Para uma movimentação prevista:
-
-```text
-                    EXPECTED
-                   /    |    \
-                  /     |     \
-                 ↓      ↓      ↓
-          COMPLETED  NOT_RECEIVED  CANCELLED
-```
-
-A mesma Transaction é atualizada durante seu ciclo.
-
-Não é criada uma segunda Transaction quando uma previsão é realizada.
-
----
-
-# 10. Transaction — Dados Esperados
-
-Toda Transaction possui uma parte que representa a expectativa:
-
-```text
-expectedAmount
-expectedDate
-```
-
-Esses dados representam:
-
-> O que o sistema esperava que acontecesse.
-
----
-
-# 11. Transaction — Dados Realizados
-
-Quando a movimentação efetivamente acontece:
-
-```text
-realizedAmount
-realizedDate
-```
-
-Esses campos representam:
-
-> O que realmente aconteceu.
-
-São opcionais enquanto a Transaction ainda não foi realizada.
-
----
-
-# 12. Transaction — Modelo Consolidado
-
-```text
-Transaction
-├── id
-├── description
-├── type
-├── status
-│
-├── expectedAmount
-├── expectedDate
-│
-├── realizedAmount
-├── realizedDate
-│
-├── sourceAccount
-├── destinationAccount
-│
-├── category
-└── recurrence
-```
-
----
-
-## Obrigatoriedade dos campos
-
-### Obrigatórios
-
-```text
-id
-description
-type
-status
-expectedAmount
-expectedDate
-```
-
-### Opcionais
-
-```text
-realizedAmount
-realizedDate
-category
-recurrence
-```
-
-### Contas
-
-As contas possuem obrigatoriedade condicionada ao tipo:
-
-```text
-INCOME
-→ destinationAccount obrigatório
-
-EXPENSE
-→ sourceAccount obrigatório
-
-TRANSFER
-→ sourceAccount obrigatório
-→ destinationAccount obrigatório
-```
-
----
-
-# 13. Regras dos Dados Realizados
-
-Quando:
-
-```text
-status = EXPECTED
-```
-
-não existem dados realizados.
-
-```text
-realizedAmount = inexistente
-realizedDate   = inexistente
-```
-
-Quando:
-
-```text
-status = COMPLETED
-```
-
-os dados realizados devem existir:
-
-```text
-realizedAmount
-realizedDate
-```
-
-Para:
-
-```text
 NOT_RECEIVED
-CANCELLED
+└── EXPECTED
 ```
 
-não existe realização.
+`COMPLETED` e `CANCELLED` são estados terminais.
 
 ---
 
-# 14. Diferença entre Esperado e Realizado
+## Criação diretamente como COMPLETED
 
-A diferença não precisa ser armazenada.
+Uma Transaction pode ser criada diretamente como:
 
-Ela é derivada:
+```text
+COMPLETED
+```
+
+Nesse caso:
+
+```text
+expectedAmount = null
+expectedDate = null
+```
+
+Os valores realizados são obrigatórios.
+
+Isso também é válido para `TRANSFER`.
+
+---
+
+## Expectativa e realização
+
+Quando uma Transaction é criada como `EXPECTED`, seus dados esperados são preservados.
+
+```text
+expectedAmount
+expectedDate
+```
+
+Quando ela é concluída:
+
+```text
+realizedAmount
+realizedDate
+```
+
+representam o que realmente aconteceu.
+
+A diferença é derivada:
 
 ```text
 difference =
     realizedAmount - expectedAmount
 ```
 
-Exemplo:
+Não é persistida como fonte de verdade.
 
-```text
-Esperado:  R$ 3.600
-Realizado: R$ 3.450
-
-Diferença:
-R$ 3.450 - R$ 3.600 = -R$ 150
-```
-
-Outro exemplo:
-
-```text
-Esperado:  R$ 3.600
-Realizado: R$ 3.800
-
-Diferença:
-+R$ 200
-```
-
-A diferença pertence somente àquela ocorrência.
-
-Ela não altera a Recurrence automaticamente.
+Se a Transaction foi criada diretamente como `COMPLETED`, sem expectativa, não existe diferença esperada.
 
 ---
 
-# 15. Recurrence
+## Valores realizados
 
-## Conceito
-
-`Recurrence` representa uma regra utilizada para gerar ou prever ocorrências futuras.
-
-Uma Recurrence não é uma Transaction.
-
-Ela funciona como uma regra/template:
+`realizedAmount` e `realizedDate` são obrigatórios em:
 
 ```text
-Recurrence
-     ↓
-ocorrência
-     ↓
-Transaction
+COMPLETED
 ```
 
-Exemplo:
+E não existem em:
 
 ```text
-Recurrence:
-Salário
-R$ 3.600
-Penúltimo dia útil
-
-        ↓
-
-Transaction:
-Setembro
-R$ 3.600
 EXPECTED
-
-        ↓
-
-Transaction:
-Outubro
-R$ 3.600
-EXPECTED
+NOT_RECEIVED
+CANCELLED
 ```
+
+Uma Transaction `COMPLETED` pode ter seus valores realizados corrigidos posteriormente, mas não pode deixar de possuir esses valores.
+
+Uma correção não cria uma nova Transaction.
 
 ---
 
-# 16. Dados da Recurrence
+## NOT_RECEIVED
+
+Representa uma expectativa que não aconteceu.
+
+Não produz entrada ou saída financeira.
+
+Pode retornar para:
+
+```text
+NOT_RECEIVED → EXPECTED
+```
+
+A expectativa continua válida.
+
+---
+
+## CANCELLED
+
+Representa o cancelamento definitivo da Transaction.
+
+Uma Transaction cancelada não volta a ser concluída.
+
+Se uma movimentação que já foi `COMPLETED` precisar ser desfeita, isso não significa alterar seu status para `CANCELLED`; trata-se de um conceito separado de reversão/estorno.
+
+---
+
+# 🔁 Recurrence
+
+`Recurrence` representa uma regra capaz de gerar Transactions recorrentes.
+
+Uma Recurrence **não é uma Transaction**.
+
+Ela possui um modelo da Transaction que será gerada.
+
+## Estrutura conceitual
 
 ```text
 Recurrence
 ├── id
-├── description
-├── amount
-├── type
-├── financialAccount
-├── category
+├── profileId
+├── transactionTemplate
+│   ├── type
+│   ├── sourceAccountId
+│   ├── destinationAccountId
+│   ├── categoryId
+│   ├── expectedAmount
+│   └── description
 ├── frequency
 ├── rule
 ├── startDate
 ├── endDate
+└── transactionIds[]
+```
+
+A Transaction gerada possui:
+
+```text
+recurrenceId
+```
+
+Uma Transaction criada manualmente possui `recurrenceId = null`.
+
+---
+
+## Regras de recorrência
+
+A frequência determina:
+
+> Com que frequência ocorre.
+
+A regra determina:
+
+> Como a data da ocorrência é determinada.
+
+Regras previstas:
+
+1. Dia específico do mês.
+2. Dia específico da semana.
+3. Último dia do mês.
+4. Primeiro dia útil.
+5. Último dia útil.
+6. Penúltimo dia útil.
+7. A cada N dias.
+
+---
+
+## Valor recorrente
+
+O valor é inicialmente fixo.
+
+A Transaction gerada recebe o:
+
+```text
+expectedAmount
+```
+
+definido na Recurrence.
+
+Uma Transaction individual pode posteriormente possuir valor realizado diferente.
+
+O valor da Recurrence continua sendo o modelo original.
+
+---
+
+## Sincronização
+
+Quando a Recurrence é alterada, as Transactions vinculadas que ainda estejam:
+
+```text
+EXPECTED
+```
+
+são atualizadas.
+
+Transactions já processadas não são alteradas.
+
+Se a alteração da Recurrence produzir uma configuração inválida para uma Transaction existente, a alteração deve ser rejeitada.
+
+---
+
+# 🏷️ Category
+
+Category representa uma classificação para Transactions.
+
+## Estrutura
+
+```text
+Category
+├── id
+├── profileId
+├── name
+├── expectedMonthlyAmount
 └── active
 ```
 
----
+A categoria possui uma expectativa mensal, mas **não funciona como limite de gastos**.
 
-# 17. Frequency × Rule
-
-Esses conceitos são separados.
-
-### Frequency
-
-Define:
-
-> Com que frequência acontece?
-
-### Rule
-
-Define:
-
-> Como determinar a data da ocorrência?
+Não bloqueia Transactions.
 
 ---
 
-# 18. Regras de Recurrence
-
-A primeira versão contempla:
+## Expected Monthly Amount
 
 ```text
-SPECIFIC_DAY_OF_MONTH
-SPECIFIC_DAY_OF_WEEK
-LAST_DAY_OF_MONTH
-FIRST_BUSINESS_DAY
-LAST_BUSINESS_DAY
-PENULTIMATE_BUSINESS_DAY
-EVERY_N_DAYS
+null
 ```
+
+Significa que não existe expectativa definida.
+
+```text
+0
+```
+
+Significa expectativa explicitamente igual a zero.
+
+```text
+> 0
+```
+
+Representa a expectativa mensal de gasto.
+
+O valor efetivamente gasto é calculado a partir das Transactions.
+
+---
+
+## Desativação
+
+Categories não são fisicamente excluídas.
+
+```text
+active = false
+```
+
+Uma categoria desativada:
+
+* não pode ser escolhida em novas Transactions;
+* não aparece como opção ao editar Transactions;
+* continua aparecendo no histórico;
+* não participa das métricas atuais baseadas em categorias ativas.
+
+Transactions antigas continuam apontando para a categoria.
+
+Se uma categoria desativada for criada novamente com o mesmo nome para o mesmo Profile, a categoria existente é reativada.
+
+---
+
+# 📋 Obligation
+
+`Obligation` representa um compromisso financeiro.
 
 Exemplos:
-
-```text
-Todo dia 10
-Toda segunda-feira
-Último dia do mês
-Primeiro dia útil
-Último dia útil
-Penúltimo dia útil
-A cada 15 dias
-```
-
----
-
-# 19. Recurrence e alterações pontuais
-
-Uma alteração em uma ocorrência específica não deve alterar automaticamente a regra original.
-
-Exemplo:
-
-```text
-Recurrence:
-Salário = R$ 3.600
-```
-
-Outubro:
-
-```text
-Esperado: R$ 3.600
-Realizado: R$ 3.450
-```
-
-Novembro:
-
-```text
-Esperado: R$ 3.600
-```
-
-A ocorrência de outubro não modifica a Recurrence.
-
-Exceções específicas de recorrência, como um salário excepcionalmente diferente em determinado mês, poderão ser tratadas futuramente.
-
----
-
-# 20. Obligation
-
-## Conceito
-
-`Obligation` representa um compromisso financeiro que precisa ser pago.
-
-Exemplos:
-
-```text
-Fatura do cartão
-Aluguel
-Conta de energia
-Faculdade
-Empréstimo
-Dívida
-Outros compromissos
-```
-
----
-
-# 21. Tipos de Obligation
 
 ```text
 CREDIT_CARD_BILL
@@ -793,54 +668,7 @@ LOAN
 OTHER
 ```
 
----
-
-# 22. Dados da Obligation
-
-```text
-Obligation
-├── id
-├── description
-├── amount
-├── dueDate
-├── type
-├── status
-└── payments
-```
-
----
-
-# 23. Valor da Obligation
-
-`Obligation.amount` representa o **valor esperado/projetado** da obrigação.
-
-Ele não deve ser sobrescrito pelo valor efetivamente pago.
-
-Exemplo:
-
-```text
-Obligation:
-Valor esperado = R$ 500
-```
-
-Pagamento:
-
-```text
-Payment:
-Valor realizado = R$ 550
-```
-
-Continuamos preservando:
-
-```text
-Expected = R$ 500
-Paid     = R$ 550
-Difference = +R$ 50
-```
-
----
-
-# 24. Estados da Obligation
+## Status
 
 ```text
 PENDING
@@ -850,1273 +678,987 @@ OVERDUE
 CANCELLED
 ```
 
-Fluxo normal:
+---
+
+## Valor
 
 ```text
-             PENDING
-                │
-          pagamento parcial
-                ↓
-        PARTIALLY_PAID
-           │          │
-           │          └── vencimento com saldo
-           │                    ↓
-           │                 OVERDUE
-           │
-           └── restante = 0
-                       ↓
-                     PAID
+amount
 ```
+
+representa o valor esperado da obrigação.
+
+O valor não é substituído pelos pagamentos realizados.
 
 ---
 
-# 25. Payment
-
-## Conceito
-
-`Payment` representa especificamente a **liquidação de uma Obligation**.
-
-Não representa qualquer saída de dinheiro.
-
-Exemplo:
-
-```text
-Comprar refrigerante:
-→ Transaction EXPENSE
-
-Pagar fatura do cartão:
-→ Payment
-```
-
----
-
-# 26. Dados do Payment
-
-```text
-Payment
-├── id
-├── obligation
-├── moneyAccount
-├── amount
-├── paymentDate
-└── status
-```
-
-A `moneyAccount` obrigatoriamente representa uma conta do tipo:
-
-```text
-MONEY
-```
-
----
-
-# 27. Estados do Payment
-
-```text
-PENDING
-COMPLETED
-CANCELLED
-```
-
-Fluxo:
-
-```text
-PENDING
-   ├──→ COMPLETED
-   └──→ CANCELLED
-```
-
----
-
-# 28. Payment parcial
+## Pagamentos
 
 Uma Obligation pode possuir vários Payments.
 
-Exemplo:
+Isso permite:
 
 ```text
-Obligation:
-R$ 800
-```
+Obligation = R$ 1.000
 
-Pagamentos:
-
-```text
-08/10 → R$ 300
-09/10 → R$ 200
-10/10 → R$ 300
-```
-
-Total pago:
-
-```text
-R$ 800
-```
-
-A obrigação passa a:
-
-```text
-PAID
+Payment = R$ 300
+Payment = R$ 400
+Payment = R$ 300
 ```
 
 ---
 
-# 29. Valor restante da Obligation
+## Valores derivados
 
-O valor restante é derivado:
+```text
+paidAmount =
+    Σ Payment.amount
+    onde status = COMPLETED
+```
 
 ```text
 remainingAmount =
     max(
         0,
-        obligation.amount
-        - sum(completed payments)
+        amount - paidAmount - waivedAmount
     )
 ```
 
-Não é necessário tratá-lo como fonte de verdade.
-
----
-
-# 30. Diferença entre esperado e pago
-
-Também é derivada:
-
 ```text
 difference =
-    paidAmount - expectedAmount
+    paidAmount - amount
 ```
+
+Esses valores são derivados.
+
+---
+
+## Waiver / abatimento
+
+Uma obrigação pode ter parte do valor abatida sem que isso seja um Payment.
 
 Exemplo:
 
 ```text
-Esperado: R$ 500
-Pago:     R$ 550
-
-Diferença: +R$ 50
-```
-
----
-
-# 31. Pagamento acima do esperado
-
-Se:
-
-```text
-Expected = R$ 500
-Paid = R$ 550
-```
-
-A obrigação fica quitada.
-
-A diferença de R$ 50 é preservada como diferença daquela obrigação.
-
----
-
-# 32. Pagamento abaixo do esperado
-
-Se:
-
-```text
-Expected = R$ 500
-Paid = R$ 450
-```
-
-Existem duas possibilidades de negócio:
-
-### Pagamento insuficiente
-
-```text
-Remaining = R$ 50
-Status = PARTIALLY_PAID
-```
-
-### Pagamento aceito como liquidação
-
-Se o credor aceitar R$ 450 como quitação, os R$ 50 restantes são tratados como valor dispensado/waived.
-
-Os pagamentos anteriores não são revertidos.
-
----
-
-# 33. Waiver / Dispensa da obrigação
-
-Existe uma diferença importante entre:
-
-### Cancelar Payment
-
-```text
-Obligation = R$ 300
-
-Payment = R$ 300
-Status = CANCELLED
-```
-
-A obrigação continua existindo.
-
-Se passar do vencimento:
-
-```text
-OVERDUE
-```
-
-Outro pagamento poderá ser realizado posteriormente.
-
----
-
-### Dispensar o restante da Obligation
-
-Exemplo:
-
-```text
-Obligation = R$ 300
-Paid = R$ 200
-Waived = R$ 100
+Obligation = R$ 500
+Payment = R$ 450
+waivedAmount = R$ 50
 ```
 
 Resultado:
 
 ```text
-Expected = R$ 300
-Paid = R$ 200
-Waived = R$ 100
-Remaining = R$ 0
+remainingAmount = R$ 0
+status = PAID
 ```
 
-Os R$ 200 pagos continuam no histórico.
-
-A dispensa remove apenas o restante que deixou de ser exigido.
-
-A forma técnica de representar essa dispensa ainda será definida na implementação.
+Se houver apenas um abatimento parcial e ainda existir saldo, o status continua sendo determinado pelas regras normais da obrigação.
 
 ---
 
-# 34. Overdue
+## Status da Obligation
 
-Se a data de vencimento passar e existir valor restante:
+### PENDING
 
-```text
-remainingAmount > 0
-```
+Antes do vencimento e ainda existe valor restante sem pagamento suficiente.
 
-a obrigação passa a:
+### PARTIALLY_PAID
 
-```text
-OVERDUE
-```
+Existe algum Payment concluído, ainda existe saldo restante e o vencimento ainda não passou.
 
-Ela permanece na Projection.
+### OVERDUE
 
-Importante:
+A data de vencimento passou e ainda existe valor restante.
 
-> Uma obrigação vencida não gera uma nova despesa todos os dias.
+Pode existir pagamento parcial.
 
-Ela continua sendo **uma única obrigação em aberto**.
+### PAID
 
-Exemplo:
+O valor restante é zero através de pagamentos e/ou abatimento.
 
-```text
-Obligation:
-R$ 500
-Vencimento: 10/10
+### CANCELLED
 
-11/10:
-Remaining = R$ 500
-Status = OVERDUE
-```
+O compromisso foi cancelado.
 
-Se pagar R$ 200:
-
-```text
-Paid = R$ 200
-Remaining = R$ 300
-Status = OVERDUE
-```
-
-Se pagar os R$ 300 restantes:
-
-```text
-Remaining = R$ 0
-Status = PAID
-```
+O cancelamento extingue o saldo pendente, mas não apaga Payments históricos.
 
 ---
 
-# 35. CreditAccount
+# 💳 Payment
 
-Um cartão/instrumento de crédito é tratado como uma `FinancialAccount` do tipo `CREDIT`.
+Payment representa um pagamento que **realmente aconteceu**.
 
-O conceito pode ser detalhado como:
+Não existe estado `PENDING`.
+
+Se algo ainda não foi pago, a `Obligation` representa essa previsão.
+
+## Estrutura
 
 ```text
-CreditAccount
+Payment
 ├── id
-├── name
-├── creditLimit
-├── closingDay
-└── dueRule
+├── obligationId
+├── accountId
+├── amount
+├── paymentDate
+└── status
 ```
 
-Exemplos:
+## Status
 
 ```text
-Nubank
-Cartão do João
-PicPay
+COMPLETED
+CANCELLED
+```
+
+### COMPLETED
+
+Representa um pagamento efetivamente realizado.
+
+O pagamento pode utilizar:
+
+```text
+MONEY
+```
+
+ou:
+
+```text
+CREDIT
+```
+
+da Account.
+
+### CANCELLED
+
+Um Payment concluído pode ser cancelado.
+
+```text
+COMPLETED → CANCELLED
+```
+
+O cancelamento reverte seu efeito financeiro.
+
+---
+
+## Pagamento com MONEY
+
+O valor é retirado da Account.
+
+---
+
+## Pagamento com CREDIT
+
+O Payment solicita ao módulo de Credit a utilização do crédito.
+
+O Payment não manipula diretamente:
+
+```text
+creditUsed
+creditAvailable
+Bill
+```
+
+Essas regras pertencem ao módulo de Credit.
+
+---
+
+## Cancelamento
+
+Ao cancelar um Payment:
+
+### MONEY
+
+O valor retorna à Account.
+
+### CREDIT
+
+A CreditOperation associada é revertida.
+
+O Payment continua preservado como histórico.
+
+---
+
+# 💳 Credit
+
+O módulo `Credit` controla a utilização de crédito e suas faturas.
+
+Não existe `CreditAccount`.
+
+O limite pertence à:
+
+```text
+Account.creditLimit
+```
+
+O módulo Credit gerencia:
+
+```text
+CreditOperation
+Bill
 ```
 
 ---
 
-# 36. Fechamento da fatura
+# 💳 CreditOperation
 
-O cartão possui um dia fixo de fechamento.
+Representa uma utilização efetiva do crédito.
 
-O próprio dia de fechamento já pertence ao **próximo ciclo**.
-
-Exemplo:
+## Estrutura
 
 ```text
-closingDay = 10
+CreditOperation
+├── id
+├── paymentId
+├── accountId
+├── billId
+├── amount
+├── operationDate
+└── status
 ```
 
-Então:
+## Status
 
 ```text
-09/09 → fatura atual
-10/09 → próxima fatura
-11/09 → próxima fatura
+APPLIED
+REVERSED
+```
+
+Transição:
+
+```text
+APPLIED → REVERSED
+```
+
+Não é permitido retornar para `APPLIED`.
+
+---
+
+## Crédito utilizado
+
+Somente operações `APPLIED` consomem crédito.
+
+```text
+creditUsed =
+    Σ CreditOperation.amount
+    onde status = APPLIED
+```
+
+```text
+creditAvailable =
+    creditLimit - creditUsed
+```
+
+Uma CreditOperation só pode ser criada se:
+
+```text
+creditAvailable >= amount
 ```
 
 ---
 
-# 37. Ciclo da Bill
+## Reversão
 
-Exemplo:
-
-```text
-closingDay = 10
-```
-
-Uma fatura pode ser:
+Quando:
 
 ```text
-11/08 → 09/09
+APPLIED → REVERSED
 ```
 
-A próxima:
+a operação deixa de consumir crédito.
 
-```text
-10/09 → 10/10
-```
-
-Uma compra realizada em:
-
-```text
-10/09
-```
-
-pertence à próxima fatura.
+A reversão não cria crédito diretamente; ela remove aquela operação do conjunto de operações que representam o crédito utilizado.
 
 ---
 
-# 38. Due Date da Bill
+# 🧾 Bill
 
-A data de vencimento é:
+Bill representa o ciclo mensal de crédito de uma Account.
 
-> **7 dias corridos após o fechamento.**
-
-Fins de semana também são contabilizados.
-
-Exemplo:
-
-```text
-Fechamento: 10/09
-Vencimento: 17/09
-```
+Existe uma Bill para cada mês de uma Account que possui crédito, inclusive quando não houver gastos.
 
 ---
 
-# 39. Bill
-
-## Conceito
-
-`Bill` representa uma fatura de um `CreditAccount`.
-
-Ela agrupa as Transactions de crédito pertencentes àquele ciclo.
-
-Conceitualmente:
+## Estrutura
 
 ```text
 Bill
-├── obligation
-├── creditAccount
-├── startDate
-├── endDate
-└── closingDate
+├── id
+├── accountId
+├── referenceMonth
+├── closingDate
+├── dueDate
+└── status
 ```
 
-A Bill é conceitualmente uma especialização de `Obligation`.
-
-A decisão entre herança ou composição será feita durante a implementação.
-
----
-
-# 40. Bill — Estados
+## Status
 
 ```text
 OPEN
 CLOSED
-PAID
-OVERDUE
-CANCELLED
 ```
-
-O total da Bill é derivado das Transactions.
-
-`totalAmount` não deve ser tratado como fonte de verdade.
 
 ---
 
-# 41. Compra no crédito
+## Ciclo
 
-Quando uma Transaction de despesa é realizada em uma conta CREDIT:
+O `closingDate` pertence ao próximo ciclo.
+
+Exemplo:
 
 ```text
-Transaction EXPENSE
-        ↓
-CreditAccount
-        ↓
-Bill
-        ↓
+closingDate = dia 10
+
+09/09 → Bill anterior
+10/09 → próximo Bill
+11/09 → próximo Bill
+```
+
+O `CreditOperation` pertence ao Bill cujo ciclo contém sua `operationDate`.
+
+---
+
+## Bill OPEN
+
+Pode receber novas CreditOperations.
+
+## Bill CLOSED
+
+Não pode receber novas CreditOperations.
+
+---
+
+## Fechamento
+
+Quando uma Bill é fechada:
+
+```text
+Bill CLOSED
+      ↓
 Obligation
 ```
 
-A compra:
+Uma Obligation é criada para representar a responsabilidade financeira daquela Bill.
 
-* não reduz imediatamente o dinheiro disponível;
-* aumenta o compromisso financeiro futuro;
-* reduz o crédito disponível;
-* pode reduzir a capacidade diária de gasto.
-
-Exemplo:
+Mesmo uma Bill com valor zero gera uma Obligation:
 
 ```text
-Dinheiro atual = R$ 1.000
-
-Compra no crédito = R$ 300
-```
-
-Resultado:
-
-```text
-Dinheiro = R$ 1.000
-Compromisso futuro += R$ 300
-Crédito disponível -= R$ 300
+amount = 0
+status = PAID
 ```
 
 ---
 
-# 42. Pagamento da fatura
+# 💰 Bill e CreditOperations
 
-Quando a fatura é paga:
+O valor atual da Bill é derivado das CreditOperations:
 
 ```text
-Payment
+billAmount =
+    Σ CreditOperation.amount
+    onde status = APPLIED
+```
+
+Uma CreditOperation `REVERSED` deixa de participar do valor atual da Bill.
+
+O valor original da operação permanece preservado.
+
+Isso permite manter o histórico:
+
+```text
+Original
    ↓
-Obligation / Bill
+Operation APPLIED
    ↓
-MONEY Account
-```
-
-O pagamento:
-
-* reduz o dinheiro da conta MONEY;
-* reduz o valor restante da obrigação;
-* quando totalmente quitado, encerra a obrigação;
-* deve liberar o crédito utilizado conforme o estado financeiro do cartão.
-
----
-
-# 43. Projection
-
-## Conceito
-
-`Projection` representa o cálculo da situação financeira futura.
-
-Ela **não é uma entidade persistida como fonte de verdade**.
-
-A Projection é produzida a partir dos dados atuais e dos eventos futuros conhecidos.
-
----
-
-# 44. Princípio da Projection
-
-> Projection começa pelo estado financeiro atual e simula os eventos financeiros futuros conhecidos em ordem cronológica para determinar como o dinheiro e os compromissos irão evoluir.
-
-Ela utiliza:
-
-* saldos atuais;
-* Transactions realizadas;
-* Payments realizados;
-* Transactions futuras;
-* ocorrências de Recurrence;
-* Obligations futuras;
-* Payments futuros;
-* compromissos de crédito.
-
----
-
-# 45. Histórico não deve ser reaplicado
-
-Transactions e Payments concluídos são utilizados para determinar o estado atual.
-
-Depois que o estado atual é estabelecido:
-
-> Os eventos históricos não são novamente aplicados como eventos futuros.
-
-Isso evita dupla contagem.
-
-Exemplo:
-
-```text
-Salário de setembro já recebido
-```
-
-Ele contribuiu para o saldo atual.
-
-A Projection não deve adicionar novamente o salário de setembro.
-
----
-
-# 46. ProjectionEvent
-
-Durante o cálculo, diferentes tipos de eventos futuros podem ser normalizados em um conceito temporário:
-
-```text
-ProjectionEvent
-├── date
-├── amount
-├── type
-└── source
-```
-
-Exemplo:
-
-```text
-10/09   +R$ 3.600   INCOME
-12/09   -R$   100   TRANSACTION
-17/09   -R$   400   OBLIGATION
-20/09   -R$   200   PAYMENT
-```
-
-Os eventos são ordenados cronologicamente.
-
----
-
-# 47. Estrutura conceitual da Projection
-
-```text
-Projection
-├── CurrentState
-├── FutureEvents
-└── ProjectionResult
+Operation REVERSED
+   ↓
+Bill recalculada
 ```
 
 ---
 
-## CurrentState
+# 💸 Refunds
 
-```text
-CurrentState
-├── moneyBalance
-├── creditUsed
-└── creditAvailable
-```
+Um refund não é uma entidade própria.
 
-Representa a situação real no momento do cálculo.
+Quando uma CreditOperation é revertida depois que a Bill já foi paga, pode surgir um pagamento em excesso.
 
----
-
-## FutureEvents
-
-Conjunto dos eventos futuros conhecidos.
-
-Podem vir de:
-
-* Transactions EXPECTED;
-* Recurrences;
-* Obligations;
-* Payments;
-* Bills;
-* compromissos de crédito.
-
----
-
-## ProjectionResult
-
-Resultado calculado:
-
-```text
-ProjectionResult
-├── currentBalance
-├── projectedBalance
-├── committedAmount
-├── expectedIncome
-├── expectedExpenses
-├── dailySpendingLimit
-└── timeline
-```
-
-O Dashboard consome esse resultado.
-
-O Dashboard não deve duplicar as regras financeiras da Projection.
-
----
-
-# 48. Exemplo de Projection
-
-Estado atual:
-
-```text
-Saldo atual: R$ 440
-```
-
-Eventos:
-
-```text
-03/10 → obrigação R$ 100
-05/10 → obrigação R$ 150
-10/10 → salário R$ 3.600
-```
-
-Projection:
-
-```text
-Hoje:
-R$ 440
-
-03/10:
-R$ 340
-
-05/10:
-R$ 190
-
-10/10:
-R$ 3.790
-```
-
-A Projection deve permitir que o saldo fique negativo.
-
-Não deve esconder ou corrigir artificialmente uma insuficiência futura.
-
----
-
-# 49. Expected Income
-
-Uma entrada prevista não representa dinheiro líquido ainda disponível.
-
-Exemplo:
-
-```text
-Hoje: 10/10
-
-Salário esperado:
-15/10
-R$ 3.600
-```
-
-Até o dia 15:
-
-```text
-Saldo atual
-≠
-Saldo atual + salário
-```
-
-O salário pode aparecer na Projection, mas não faz parte do dinheiro líquido atual.
-
----
-
-# 50. Confirmação de uma entrada
-
-Quando a entrada realmente acontece, a mesma Transaction é atualizada:
-
-```text
-EXPECTED
-    ↓
-COMPLETED
-```
-
-Exemplo:
-
-```text
-Esperado:
-R$ 3.600 em 15/10
-
-Recebido:
-R$ 3.450 em 15/10
-```
-
-Resultado:
-
-```text
-expectedAmount = R$ 3.600
-expectedDate   = 15/10
-
-realizedAmount = R$ 3.450
-realizedDate   = 15/10
-
-status = COMPLETED
-```
-
-O valor realizado:
-
-```text
-R$ 3.450
-```
-
-passa a fazer parte do saldo real.
-
----
-
-# 51. Entrada recebida em data diferente
-
-Também é permitido que a entrada seja recebida em outro dia.
-
-Exemplo:
-
-```text
-Esperado:
-15/10
-R$ 3.600
-
-Recebido:
-17/10
-R$ 3.450
-```
-
-A Transaction preserva:
-
-```text
-expectedDate  = 15/10
-realizedDate  = 17/10
-```
-
-A Projection só considera o valor como dinheiro real a partir da realização.
-
----
-
-# 52. Entrada não recebida
-
-Quando o usuário informa que a entrada não aconteceu:
-
-```text
-EXPECTED
-    ↓
-NOT_RECEIVED
-```
-
-A previsão original permanece registrada.
-
-Porém:
-
-* nenhum dinheiro entra;
-* a entrada não continua sendo projetada como futura;
-* a Recurrence não é alterada.
-
-Exemplo:
-
-```text
-Recurrence:
-Salário R$ 3.600
-
-15/10:
-NOT_RECEIVED
-
-15/11:
-EXPECTED
-R$ 3.600
-```
-
----
-
-# 53. Daily Spending Limit
-
-## Conceito
-
-`dailySpendingLimit` representa:
-
-> Quanto do dinheiro atualmente disponível pode ser consumido por dia até a próxima entrada esperada, depois de reservar todas as obrigações conhecidas que ocorrerão nesse intervalo.
-
----
-
-# 54. Exemplo do Daily Spending Limit
-
-Situação:
-
-```text
-Saldo atual: R$ 1.000
-Próxima entrada: em 10 dias
-Obrigações no intervalo: R$ 300
-```
-
-Primeiro reservamos as obrigações:
-
-```text
-R$ 1.000 - R$ 300 = R$ 700
-```
-
-Depois:
-
-```text
-R$ 700 / 10 dias = R$ 70/dia
-```
-
-Resultado:
-
-```text
-dailySpendingLimit = R$ 70
-```
-
----
-
-# 55. Não recalcular artificialmente no dia da obrigação
-
-O limite já considera a obrigação desde o início.
-
-Não deve acontecer:
-
-```text
-Antes da obrigação:
-R$ 70/dia
-
-No dia da obrigação:
-"agora recalcula"
-
-Depois:
-outro limite artificial
-```
-
-A obrigação já estava provisionada.
-
-Isso evita criar a ilusão de que o usuário pode gastar mais dinheiro antes do vencimento.
-
----
-
-# 56. Recalculo do Daily Spending Limit
-
-O limite deve ser recalculado quando ocorrer uma mudança financeira relevante.
-
-Exemplos:
-
-* dinheiro entra;
-* dinheiro é gasto;
-* Payment é realizado;
-* nova Obligation é criada;
-* Obligation é alterada;
-* Obligation é cancelada;
-* nova compra no crédito aumenta compromisso futuro;
-* outro evento altera significativamente o estado financeiro ou os compromissos conhecidos.
-
----
-
-# 57. Exemplo de recalculo
-
-Inicial:
-
-```text
-Saldo: R$ 1.000
-Obrigação: R$ 300
-Próxima entrada: em 10 dias
-
-Limite:
-(R$1.000 - R$300) / 10
-= R$70/dia
-```
-
-Usuário gasta R$100:
-
-```text
-Saldo:
-R$900
-```
-
-Mantendo a obrigação provisionada:
-
-```text
-R$900 - R$300 = R$600
-```
-
-Se restarem 9 dias:
-
-```text
-R$600 / 9
-≈ R$66,67/dia
-```
-
----
-
-# 58. Expected Income e Daily Spending Limit
-
-Uma entrada esperada não deve ser adicionada ao saldo atual antes de sua realização.
-
-Entretanto, a Projection conhece essa entrada futura.
-
-Exemplo:
-
-```text
-Hoje:
-R$ 1.000
-
-15/10:
-+R$ 3.600
-```
-
-Hoje:
-
-```text
-Saldo real = R$ 1.000
-```
-
-A Projection:
-
-```text
-Hoje → R$ 1.000
-15/10 → R$ 4.600
-```
-
-O dinheiro esperado pode ser utilizado para planejamento futuro, mas não é tratado como dinheiro líquido atual.
-
----
-
-# 59. Fluxo Financeiro Geral
-
-O fluxo conceitual do sistema é:
-
-```text
-Recurrence
-    ↓
-Transaction EXPECTED
-    ↓
-Projection
-    ↓
-Confirmação
-    ↓
-Transaction COMPLETED
-    ↓
-Estado financeiro real
-    ↓
-Nova Projection
-```
-
-Para obrigações:
-
-```text
-Transaction / Bill / Regra
-          ↓
-      Obligation
-          ↓
-       Projection
-          ↓
-       Payment
-          ↓
-     MONEY Account
-          ↓
-   Novo estado financeiro
-          ↓
-      Nova Projection
-```
-
----
-
-# 60. Fluxo de Crédito
-
-```text
-CreditAccount
-      ↓
-   closingDay
-      ↓
-     Bill
-      ↓
- Transactions
-      ↓
- Total da Bill
-      ↓
- Obligation
-      ↓
- Projection
-      ↓
- Payment
-      ↓
- MONEY Account
-```
-
-Uma compra no crédito:
-
-```text
-Não reduz dinheiro imediatamente
-        ↓
-Aumenta compromisso futuro
-        ↓
-Reduz crédito disponível
-```
-
-O pagamento da fatura:
-
-```text
-Reduz dinheiro
-        ↓
-Reduz obrigação
-        ↓
-Libera crédito
-```
-
----
-
-# 61. Relações conceituais
-
-```text
-Profile
-│
-├── 1:N FinancialAccount
-│
-├── 1:N Transaction
-│
-├── 1:N Recurrence
-│
-├── 1:N Obligation
-│
-└── 1:N Payment
-```
-
-```text
-Recurrence
-    │
-    └── gera → Transaction
-```
+O excesso é devolvido através de uma:
 
 ```text
 Transaction
-    │
-    ├── sourceAccount
-    ├── destinationAccount
-    ├── category
-    └── recurrence
-```
-
-```text
-Obligation
-    │
-    └── 1:N Payment
-```
-
-```text
-Bill
-    │
-    ├── CreditAccount
-    ├── Transactions
-    └── Obligation
+type = INCOME
 ```
 
 ---
 
-# 62. Fonte de verdade
+## Cálculo
 
-Uma regra fundamental do sistema é evitar armazenar dados derivados como fonte principal.
+```text
+currentBillAmount =
+    Σ CreditOperations APPLIED
+```
 
-### Exemplos de dados derivados
+```text
+totalPaid =
+    Σ Payments COMPLETED
+```
 
-Não são fontes primárias:
+```text
+refundDue =
+    totalPaid
+    - currentBillAmount
+    - totalRefunded
+```
+
+Somente quando:
+
+```text
+refundDue > 0
+```
+
+é criado um novo refund.
+
+O refund retorna para a Account que realizou o Payment.
+
+---
+
+## Distribuição dos refunds
+
+Quando existem múltiplos Payments:
+
+1. Os Payments concluídos são ordenados pelo `paymentDate` mais recente.
+2. Em caso de empate, utiliza-se o `id`.
+3. O refund é distribuído primeiro para o Payment mais recente.
+4. Caso o excesso ultrapasse o valor desse Payment, continua no próximo.
+
+Os Payments originais permanecem intactos.
+
+---
+
+# 📊 Projection
+
+Projection calcula a evolução financeira esperada.
+
+Não representa uma entidade financeira persistida.
+
+É uma visão calculada do estado atual e dos eventos futuros conhecidos.
+
+---
+
+## Estado atual
+
+A Projection considera:
 
 ```text
 currentBalance
-spentInCategory
-remainingAmount
-billTotal
-difference
+creditUsed
 creditAvailable
-projectedBalance
-dailySpendingLimit
 ```
-
-Esses valores devem ser calculados a partir dos dados de origem.
 
 ---
 
-# 63. Dados que devem ser preservados
+## Eventos futuros
 
-O sistema deve preservar informações importantes para histórico:
+São considerados compromissos que ainda podem afetar o futuro.
 
-### Transaction
+Por exemplo:
 
 ```text
-expectedAmount
-expectedDate
+Transaction EXPECTED
+Obligation com remainingAmount > 0
+```
+
+Transactions já concluídas não são projetadas novamente.
+
+Payments concluídos também não são eventos futuros.
+
+---
+
+## Expected Income
+
+Uma entrada futura é representada por:
+
+```text
+Transaction
+type = INCOME
+status = EXPECTED
+```
+
+Não existe uma entidade específica para salário.
+
+---
+
+## Recebimento
+
+Quando a entrada acontece:
+
+```text
+EXPECTED → COMPLETED
+```
+
+com:
+
+```text
 realizedAmount
 realizedDate
-status
 ```
 
-### Obligation
+O valor realizado pode ser diferente do esperado.
+
+Exemplo:
 
 ```text
-expectedAmount
-Payments realizados
-possíveis valores dispensados
-status
+expectedAmount = R$ 3.600
+realizedAmount = R$ 3.450
 ```
 
-Isso permite comparar:
+A diferença será:
 
 ```text
-planejado
-     ×
-realizado
+difference = -R$ 150
 ```
+
+A Recurrence permanece com seu valor original de R$ 3.600.
 
 ---
 
-# 64. Regras de negócio consolidadas
+## NOT_RECEIVED
+
+Uma entrada `NOT_RECEIVED` não adiciona dinheiro ao saldo atual e não altera o valor da Recurrence.
+
+---
+
+# 📅 Daily Spending Limit
+
+A Projection também fornece um limite diário de gasto.
+
+Ele representa:
+
+> Quanto do dinheiro atualmente disponível pode ser consumido por dia até a próxima entrada esperada, depois de reservar os compromissos conhecidos nesse intervalo.
+
+Exemplo:
+
+```text
+Saldo atual:       R$ 1.000
+Próxima entrada:   10 dias
+Obrigações:        R$ 300
+
+Valor disponível:
+R$ 1.000 - R$ 300 = R$ 700
+
+Limite diário:
+R$ 700 / 10 = R$ 70
+```
+
+As obrigações são consideradas na projeção desde o início do período.
+
+O vencimento da obrigação não cria um novo limite naquele dia.
+
+---
+
+# 🔄 Fluxos principais
 
 ## Transaction
 
-1. Uma Transaction pode representar uma movimentação prevista ou realizada.
-2. A mesma Transaction evolui durante seu ciclo.
-3. `EXPECTED` representa uma previsão.
-4. `COMPLETED` representa uma movimentação realizada.
-5. `NOT_RECEIVED` representa uma entrada prevista que não aconteceu.
-6. `CANCELLED` representa uma movimentação que não acontecerá.
-7. Uma Transaction realizada possui dados esperados e realizados.
-8. A diferença entre esperado e realizado é derivada.
-9. Uma diferença pontual não altera uma Recurrence.
-10. Transactions de transferência não são receitas nem despesas.
+```text
+EXPECTED
+   │
+   ├── COMPLETED
+   ├── NOT_RECEIVED
+   └── CANCELLED
+
+NOT_RECEIVED
+   │
+   └── EXPECTED
+```
+
+---
+
+## Payment
+
+```text
+Obligation
+     ↓
+Payment
+     ↓
+COMPLETED
+     │
+     └── CANCELLED
+```
+
+---
+
+## Payment com crédito
+
+```text
+Payment.COMPLETED
+       ↓
+Credit.useCredit()
+       ↓
+CreditOperation.APPLIED
+       ↓
+Bill
+```
+
+Cancelamento:
+
+```text
+Payment.CANCELLED
+       ↓
+CreditOperation.REVERSED
+       ↓
+crédito disponível aumenta
+```
+
+---
+
+## Bill
+
+```text
+Bill OPEN
+    ↓
+closingDate
+    ↓
+Bill CLOSED
+    ↓
+Obligation criada
+```
+
+---
+
+## Reversão após pagamento
+
+```text
+CreditOperation.REVERSED
+          ↓
+Bill recalculada
+          ↓
+Obligation recalculada
+          ↓
+Payments históricos preservados
+          ↓
+excesso identificado
+          ↓
+Transaction INCOME
+          ↓
+dinheiro devolvido
+```
 
 ---
 
 ## Recurrence
 
-1. Recurrence representa uma regra, não uma ocorrência.
-2. Recurrence gera/prepara Transactions concretas.
-3. Uma alteração em uma ocorrência não altera automaticamente a regra.
-4. Salário é uma Recurrence de `INCOME`, não uma entidade especial.
-5. A primeira versão suporta regras de calendário e intervalos definidos.
-
----
-
-## Obligation
-
-1. Obligation representa um compromisso financeiro.
-2. O valor da Obligation é o valor esperado.
-3. Payments representam a liquidação.
-4. Uma Obligation pode ter vários Payments.
-5. Payments podem ser parciais.
-6. Payment CANCELLED não reduz a obrigação.
-7. Uma obrigação vencida não gera novos débitos diariamente.
-8. O valor restante é derivado.
-9. O valor efetivamente pago é derivado dos Payments.
-10. A diferença entre esperado e pago é preservada como informação derivada.
-11. O restante pode ser dispensado sem apagar Payments anteriores.
-
----
-
-## Projection
-
-1. Projection não é fonte de verdade persistida.
-2. Projection parte do estado atual.
-3. Histórico já realizado não é reaplicado como evento futuro.
-4. Eventos futuros são processados cronologicamente.
-5. Entradas esperadas não são dinheiro líquido atual.
-6. Saldo projetado pode ficar negativo.
-7. Projection concentra os cálculos utilizados pelo Dashboard.
-
----
-
-## Daily Spending Limit
-
-1. O limite representa capacidade de consumo diário até a próxima entrada esperada.
-2. Obrigações futuras dentro desse intervalo são reservadas desde o início.
-3. O vencimento da obrigação não cria artificialmente um novo limite.
-4. O limite muda quando o estado financeiro ou os compromissos conhecidos mudam.
-5. Entradas esperadas não são adicionadas ao dinheiro atual antes da realização.
-
----
-
-# 65. O que ainda não foi definido
-
-Os seguintes pontos permanecem deliberadamente para etapas futuras:
-
-* tecnologia e stack;
-* estrutura dos módulos;
-* arquitetura técnica detalhada;
-* modelagem específica do MongoDB;
-* documentos e coleções;
-* índices;
-* estratégia de persistência;
-* autenticação;
-* autorização;
-* API;
-* frontend;
-* implementação de calendário de dias úteis;
-* tratamento técnico de exceções de Recurrence;
-* representação técnica de waiver/dispensa;
-* detalhes de liberação de crédito após pagamentos;
-* metas/objetivos financeiros;
-* relatórios;
-* notificações;
-* funcionalidades avançadas de Dashboard.
-
-Esses pontos não fazem parte das decisões de domínio já fechadas.
-
----
-
-# 66. Funcionalidades futuras
-
-Algumas funcionalidades foram deliberadamente deixadas para uma etapa posterior.
-
-## Goals / Allocation
-
-O sistema poderá futuramente possuir:
-
 ```text
-Goal
-Allocation
+Recurrence
+     ↓
+gera Transaction EXPECTED
+     ↓
+Transaction possui recurrenceId
 ```
 
-para representar objetivos e alocação de dinheiro.
+Alteração:
 
-Essa parte não faz parte do núcleo financeiro definido até o momento.
+```text
+Recurrence alterada
+       ↓
+Transactions EXPECTED vinculadas
+       ↓
+atualizadas
+```
+
+Transactions processadas não são alteradas.
 
 ---
 
-# 67. Próxima etapa do projeto
-
-O domínio conceitual inicial está consolidado.
-
-A sequência planejada agora é:
+# 🔗 Relações entre módulos
 
 ```text
-[✓] Conceito do sistema
-[✓] Modelagem conceitual
-[✓] FinancialAccount
-[✓] Transaction
-[✓] Recurrence
-[✓] Obligation
-[✓] Payment
-[✓] CreditAccount
-[✓] Bill
-[✓] Projection
-[✓] Daily Spending Limit
-[✓] Expected × Realized
-[✓] Estados e regras de negócio
+Profile
+   │
+   ├──────────────→ Account
+   │                   │
+   │                   ├────────→ Transaction
+   │                   │
+   │                   └────────→ Credit
+   │                                │
+   │                                ├── CreditOperation
+   │                                │
+   │                                └── Bill
+   │                                      │
+   │                                      ↓
+   │                                  Obligation
+   │                                      │
+   │                                      ↓
+   │                                   Payment
+   │
+   ├──────────────→ Category
+   │                    │
+   │                    ↓
+   │                Transaction
+   │
+   └──────────────→ Recurrence
+                        │
+                        ↓
+                    Transaction
 
-[ ] Arquitetura técnica
-[ ] Stack tecnológica
-[ ] Modelagem MongoDB
-[ ] Estrutura do projeto
-[ ] Implementação do domínio
-[ ] Persistência
-[ ] API
-[ ] Frontend
+Todos os módulos relevantes
+          │
+          ↓
+     Projection
 ```
 
-A próxima etapa será decidir **como transformar esse domínio em uma arquitetura e stack tecnológica**, sem alterar as regras de negócio já definidas.
+---
+
+# 🧠 Princípios de domínio
+
+### 1. Histórico não deve ser destruído
+
+Dados históricos não devem ser apagados apenas porque deixaram de ser relevantes no presente.
+
+Isso se aplica principalmente a:
+
+* Accounts;
+* Categories;
+* Transactions;
+* Payments;
+* CreditOperations;
+* Bills.
+
+---
+
+### 2. Estado atual deve ser derivado quando possível
+
+Não armazenar informações que podem ser obtidas de eventos ou operações históricas.
+
+Exemplos:
+
+```text
+currentBalance
+creditUsed
+creditAvailable
+paidAmount
+remainingAmount
+Bill.total
+difference
+```
+
+são conceitos derivados.
+
+---
+
+### 3. Previsão e realidade são diferentes
+
+O sistema mantém separado:
+
+```text
+EXPECTED
+```
+
+e:
+
+```text
+REALIZED
+```
+
+Isso permite comparar aquilo que era esperado com aquilo que realmente aconteceu.
+
+---
+
+### 4. Payment não é previsão
+
+Se algo ainda não aconteceu:
+
+```text
+Obligation
+```
+
+representa a previsão.
+
+Quando o pagamento acontece:
+
+```text
+Payment.COMPLETED
+```
+
+representa o fato ocorrido.
+
+---
+
+### 5. CreditOperation não é Payment
+
+```text
+Payment
+```
+
+representa o pagamento.
+
+```text
+CreditOperation
+```
+
+representa o consumo de crédito provocado por esse pagamento.
+
+---
+
+### 6. Bill não é Obligation
+
+```text
+Bill
+```
+
+representa o ciclo de crédito.
+
+```text
+Obligation
+```
+
+representa a responsabilidade financeira gerada pelo fechamento da Bill.
+
+---
+
+### 7. Projection não é fonte de verdade
+
+Projection calcula informações a partir dos módulos de domínio.
+
+O Dashboard deve consumir a Projection e não duplicar as regras financeiras.
+
+---
+
+# 🗂️ Estrutura esperada do projeto
+
+```text
+financial-system/
+│
+├── profile/
+│   ├── presentation/
+│   ├── application/
+│   ├── domain/
+│   └── infrastructure/
+│
+├── account/
+│   ├── presentation/
+│   ├── application/
+│   ├── domain/
+│   └── infrastructure/
+│
+├── category/
+│   ├── presentation/
+│   ├── application/
+│   ├── domain/
+│   └── infrastructure/
+│
+├── transaction/
+│   ├── presentation/
+│   ├── application/
+│   ├── domain/
+│   └── infrastructure/
+│
+├── recurrence/
+│   ├── presentation/
+│   ├── application/
+│   ├── domain/
+│   └── infrastructure/
+│
+├── obligation/
+│   ├── presentation/
+│   ├── application/
+│   ├── domain/
+│   └── infrastructure/
+│
+├── credit/
+│   ├── presentation/
+│   ├── application/
+│   ├── domain/
+│   └── infrastructure/
+│
+└── projection/
+    ├── presentation/
+    ├── application/
+    ├── domain/
+    └── infrastructure/
+```
+
+A estrutura interna pode ser adaptada quando um módulo não precisar de alguma camada. O objetivo é manter a separação de responsabilidades sem criar complexidade artificial.
+
+---
+
+# 🛠️ Tecnologias
+
+Tecnologias previstas para o projeto:
+
+* Java
+* Spring Boot
+* MongoDB
+* Spring Data MongoDB
+* Maven
+* Git / GitHub
+
+O frontend será desenvolvido posteriormente.
+
+A implementação da persistência não deve determinar as regras do domínio.
+
+---
+
+# 🚧 Ordem de desenvolvimento
+
+O desenvolvimento será realizado gradualmente:
+
+```text
+1. Domínio
+   ↓
+2. Organização dos módulos
+   ↓
+3. Modelos de domínio
+   ↓
+4. MongoDB
+   ↓
+5. Repositories
+   ↓
+6. Use Cases
+   ↓
+7. Services / Application
+   ↓
+8. Controllers
+   ↓
+9. Testes
+   ↓
+10. Frontend / Dashboard
+```
+
+A implementação deve respeitar as regras de domínio definidas neste documento.
+
+---
+
+# 📌 Estado atual do projeto
+
+### Domínio
+
+**Definido e auditado.**
+
+Módulos principais:
+
+* [x] Profile
+* [x] Account
+* [x] Category
+* [x] Transaction
+* [x] Recurrence
+* [x] Obligation
+* [x] Payment
+* [x] CreditOperation
+* [x] Bill
+* [x] Projection
+
+### Arquitetura
+
+**Definida:**
+
+```text
+Modular Monolith
++
+Layered Architecture
+```
+
+### Próxima etapa
+
+Com o domínio definido, o próximo passo é transformar as regras conceituais em **modelos de domínio concretos**, mantendo as regras independentes da infraestrutura e do MongoDB.
